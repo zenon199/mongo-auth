@@ -22,9 +22,14 @@ const port = process.env.PORT || 4000;
 // DB connect
 db();
 
+app.get("/",(req, res) => {
+    res.send("Hii this is Auth Server")
+})
+
 //User routes
-app.use('/api/v1/users/', userRoutes)
+app.use('/api/v1/users', userRoutes)
+
 
 app.listen(port, () => {
-    console.log('Server is running on 3000');
+    console.log(`Server is running on ${port}`);
 })
