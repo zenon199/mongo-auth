@@ -2,6 +2,8 @@
 import User from "../models/User.model.js";
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 export const registerUser = async (req , res) => {
     //get data
@@ -58,7 +60,7 @@ export const registerUser = async (req , res) => {
             to: user.email,
             subject: "Verify your Account",
             text: `Please click on the following link:
-                ${process.env.BASE_URL}/api/vi/users/verify${token}
+                ${process.env.BASE_URL}/api/v1/users/verify/${token}
             `
         }
 
@@ -86,15 +88,15 @@ export const verifyUser = async (req, res) => {
     //isverified to true
     //remove verification token
 
-    
-    try {
-        const token = req.params;
+    const {token} = req.params;
     console.log(token);
     if(!token) {
         return res.status(400).json({
             message: "Token not found"
         })
     }
+    try {
+    
     const user = await User.findOne({verificationToken: token})
 
     if(!user) {
@@ -103,9 +105,14 @@ export const verifyUser = async (req, res) => {
         })
     }
 
-    user.iVerified = true;
+    user.isVerified = true;
     user.verificationToken = undefined;
     await user.save();
+
+    res.status(200).json({
+        message: "Account verified successfully",
+        success: true
+    })
 
     } catch (error) {
         res.status(400).json({
@@ -143,10 +150,14 @@ export const login = async (req , res) => {
       });
     }
 
-    //
+    if(!user.isVerified) {
+        return res.status(400).json({
+            message: "Account not verified"
+        })
+    }
 
     const token = jwt.sign(
-      { id: user._id, role: user.email },
+      { id: user._id, role: user.role },
 
       process.env.JWT_SECRET,
       {
@@ -176,5 +187,62 @@ export const login = async (req , res) => {
         error,
         success: false
     })
+  }
+}
+
+export const getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password')
+    if(!user) {
+      return res.status(400).json({
+        message: "User not found",
+        success: false
+      })
+    }
+    console.log(user);
+    res.status(200).json({
+      success: true,
+      user
+    })
+
+  } catch (error) {
+    res.status(400).json({
+      message: "Error in fetching profile",
+      error,
+      success: false
+  })
+}
+}
+
+export const logOut = async (req, res) => {
+  try {
+    res.cookie('token','', {}) // expires: new Date(0)
+
+    res.status(200).json({
+      success: true,
+      message: "Logged out successfully"
+    })
+  } catch (error) {
+    res.status(400).json({
+      message: "Error in logging out",
+      error,
+      success: false
+  })
+  }
+}
+
+export const forgotPass = async (req, res) => {
+  try {
+    
+  } catch (error) {
+    
+  }
+}
+
+export const resetPass = async (req, res) => {
+  try {
+    
+  } catch (error) {
+    
   }
 }
