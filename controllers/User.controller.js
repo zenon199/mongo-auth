@@ -1,3 +1,4 @@
+
 import User from "../models/User.model.js";
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
@@ -11,13 +12,14 @@ export const registerUser = async (req , res) => {
     //send token as email mailtrap resend noswemailer
     //send success message
 
-    const {name, email, password} = req.body;
-    if(!name || !email || !password) {
-        return res.status(400).json({
-            message: "All fields required"
-        })
-    }
+    
     try {
+        const {name, email, password} = req.body;
+        if(!name || !email || !password) {
+            return res.status(400).json({
+                message: "All fields required"
+            })
+        }
         const existingUser = await User.findOne({email});
         if(existingUser) {
             return res.status(400).status({
@@ -38,6 +40,7 @@ export const registerUser = async (req , res) => {
         const token = crypto.randomBytes(32).toString("hex")
         user.verificationToken = token;
         await user.save();
+        console.log(token);
 
         const transporter = nodemailer.createTransport({
             host: process.env.MAILTRAP_HOST,
@@ -73,4 +76,46 @@ export const registerUser = async (req , res) => {
             success: false
         })
     }
+}
+
+export const verifyUser = async (req, res) => {
+    //get token from url
+    //validate token
+    //find user baased on token
+    //if not
+    //isverified to true
+    //remove verification token
+
+    
+    try {
+        const token = req.params;
+    console.log(token);
+    if(!token) {
+        return res.status(400).json({
+            message: "Token not found"
+        })
+    }
+    const user = await User.findOne({verificationToken: token})
+
+    if(!user) {
+        return res.status(400).json({
+            message: "Invalid token"
+        })
+    }
+
+    user.iVerified = true;
+    user.verificationToken = undefined;
+    await user.save();
+
+    } catch (error) {
+        res.status(400).json({
+            message: "Error in Verification",
+            error,
+            success: false
+        })
+    }
+}
+
+export const login = async (req , res) => {
+    
 }
