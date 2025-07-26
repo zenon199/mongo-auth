@@ -13,7 +13,7 @@ const register = async (req: Request, res: Response) => {
                 .max(50, 'Name must be at most 50 characters')
                 .regex(/[a-zA-Z\s]+$/, 'Name must contain only letters and spaces'),
             email: z.string()
-                .email('Invalis email address'),
+                .email('Invalid email address'),
             password: z.string()
                 .min(6, 'Password must be at least 6 characters')
                 .max(20, 'Password must be at most 20 characters')
@@ -33,15 +33,15 @@ const register = async (req: Request, res: Response) => {
         }
 
         const { name, email, password } = parsedData.data;
-        const existingUser = await User.findOne({ email });
+        // const existingUser = await User.findOne({ email });
 
-        if (existingUser) {
-            res.status(400).json({
-                message: 'User already exists',
-                success: false
-            })
-            return
-        }
+        // if (existingUser) {
+        //     res.status(400).json({
+        //         message: 'User already exists',
+        //         success: false
+        //     })
+        //     return
+        // }
 
         const token: string = Crypto.randomBytes(32).toString('hex');
         const tokenExpiry: number = Date.now() + 10 * 60 * 1000; //10 minutes
@@ -104,17 +104,9 @@ const verify = async (req: Request, res: Response) => {
     }
 }
 const login = async (req: Request, res: Response) => {
-    //zod validation
-    // email pass from body
-    //check db for user
-    //check pass
-    //token
-    //cookie
-    //send token
-    //send cookie
     const parsedData = z.object({
         email: z.string()
-            .email('Invalis email address'),
+            .email('Invalid email address'),
         password: z.string()
             .min(6, 'Password must be at least 6 characters')
             .max(20, 'Password must be at most 20 characters')
@@ -164,15 +156,42 @@ const login = async (req: Request, res: Response) => {
         }
 
         const accessToken = jwt.sign(
-            {id: user._id, email: user.email},process.env.JWT_SECRET as string,
-            {expiresIn: process.env.JWT_EXPIRY}
+            { id: user._id, email: user.email },
+            process.env.JWT_SECRET as string,
+            { expiresIn: (process.env.JWT_ACCESS_EXPIRY || "10m") } as any
         );
-        
+
         const refreshToken = jwt.sign(
-            {id: user._id, email: user.email},process.env.JWT_SECRET as string,
-            {expiresIn: process.env.JWT_REFRESH_EXPIRY}
-            );
+            { id: user._id, email: user.email },
+            process.env.JWT_SECRET as string,
+            { expiresIn: (process.env.JWT_REFRESH_EXPIRY || "1d") } as any
+        );
+
+        res.cookie("accessToken", accessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            maxAge: 1000 * 60 * 15, // 15 minutes
+            sameSite: "strict" as const
+        });
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            maxAge: 1000 * 60 * 60 * 24 * 7,// 7 days
+            sameSite: "strict" as const
+        });
         
+        res.status(200).json({
+            message: 'Login successful',
+            success: true,
+            // user: {
+            //     id: user._id,
+            //     email: user.email
+            // },
+            // accessToken,
+            // refreshToken
+            
+        })
+
     } catch (error) {
         console.log('Error logging in user', error)
         res.status(500).json({
@@ -181,6 +200,57 @@ const login = async (req: Request, res: Response) => {
         })
     }
 }
+
+const refreshAccessToken = async (req: Request, res: Response) => { 
+    const refreshToken = req.cookies?.refreshToken;
+
+    if (!refreshToken) {
+        res.status(401).json({
+            message: 'No refresh token found',
+            success: false
+        })
+        return
+    }
+
+    try {
+        const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET as string)
+
+        if (typeof decoded !== 'object' || decoded === null || !('id' in decoded)) {
+            res.status(401).json({
+                message: 'Invalid refresh token',
+                success: false
+            })
+            return
+        }
+
+        const newAccessToken = jwt.sign(
+            { id: decoded.id, email: decoded.email },
+            process.env.JWT_SECRET as string,
+            { expiresIn: (process.env.JWT_ACCESS_EXPIRY || "10m") } as any
+        )
+
+        res.cookie("accessToken", newAccessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            maxAge: 1000 * 60 * 15, // 15 minutes
+            sameSite: "strict" as const
+        });
+
+        res.status(200).json({
+            message: 'Access token refreshed successfully',
+            success: true,
+            accessToken: newAccessToken
+        })
+
+    } catch (error) {
+        console.log('Error in refreshing access token', error)
+        res.status(500).json({
+            message: 'Internal server error',
+            success: false
+        })
+    }
+}
+
 const me = async (req: Request, res: Response) => {
     
 }
@@ -198,6 +268,7 @@ export {
     register,
     verify,
     login,
+    refreshAccessToken,
     me,
     logOut,
     forgotPassword,
