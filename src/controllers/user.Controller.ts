@@ -382,7 +382,7 @@ const forgotPassword = async (req: Request, res: Response) => {
         res.status(200).json({
                 message: "Mail has been sent to the registered email, if it exist",
                 success: true
-            })
+        })
 
     } catch (error) {
         console.log('Error in forgot-pass endpoint', error)
@@ -393,7 +393,58 @@ const forgotPassword = async (req: Request, res: Response) => {
     }
 }
 const verifyForgotPassword = async (req: Request, res: Response) => {
+    const token = req.params.token;
+
+    const parsed = z.object({
+        password: z.string()
+        .min(6, "Password must be at least 6 characters")
+        .max(20, "Password must be at most 20 characters")
+        .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+        .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+        .regex(/[0-9]/, "Password must contain at least one number")
+        .regex(/[!@#$%^&*(),.?\":{}|<>]/, "Password must contain at least one special character"),
+    }).safeParse(req.body);
+
+    if (!parsed.success) {
+    res.status(400).json({
+      message: "Invalid input",
+      error: parsed.error.flatten().fieldErrors,
+      success: false,
+    });
+    return;
+    }
     
+    try {
+        const user = await User.findOne({
+            resetPasswordToken: token,
+            resetPasswordTokenExpiry: {$gt: new Date()},
+        })
+
+        if (!user) {
+            res.status(400).json({
+                success: false,
+                message: "Invalid or expired token"
+            });
+            return;
+        }
+        user.password = parsed.data.password;
+        user.resetPasswordToken = undefined;
+        user.resetPasswordTokenExpiry = undefined
+
+        await user.save();
+
+        res.status(200).json({
+                message: "Password changed successfully",
+                success: true
+        })
+    
+    } catch (error) {
+        console.log('Error in verify-forgot-pass endpoint', error)
+        res.status(500).json({
+            message: 'Internal server error',
+            success: false
+        })
+    }
 }
 
 export {
