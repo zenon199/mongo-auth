@@ -1,6 +1,6 @@
 import { Request, Response } from "express"
 import dotenv from 'dotenv'
-import { z } from "zod"
+import { string, z } from "zod"
 import Crypto from "crypto"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
@@ -13,11 +13,9 @@ interface JwtUserPayload extends jwt.JwtPayload {
     email?: string;
 }
 
-
 const JWT_SECRET = process.env.JWT_SECRET || "ghfuygr3r6783y4nfhg"
 const JWT_ACCESS_EXPIRY = process.env.JWT_ACCESS_EXPIRY || "10m";
 const JWT_REFRESH_EXPIRY = process.env.JWT_REFRESH_EXPIRY || "1d";
-console.log(JWT_SECRET)
 
 const ACCESS_COOKIE = {
   httpOnly: true,
@@ -345,7 +343,54 @@ const logOut = async (req: Request, res: Response) => {
     }
 }
 const forgotPassword = async (req: Request, res: Response) => {
+    const parsed = z.object({
+        email: z.string().email("Invalid email address")
+    }).safeParse(req.body);
+
+    if (!parsed.success) {
+        res.status(401).json({
+            message: "Invalid input",
+            error: parsed.error.flatten().fieldErrors,
+            success: false,
+        })
+        return
+    }
+
+    const { email } = parsed.data;
     
+    try {
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            res.status(200).json({
+                message: "Mail has been sent to the registered email, if it exist",
+                success: true
+            })
+            return
+        }
+
+        const token = Crypto.randomBytes(32).toString("hex");
+        const expiryTime = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+        
+        user.resetPasswordToken = token;
+        user.resetPasswordTokenExpiry = expiryTime;
+
+        await user.save();
+
+        await sendVerificationMail(user.email, token);
+
+        res.status(200).json({
+                message: "Mail has been sent to the registered email, if it exist",
+                success: true
+            })
+
+    } catch (error) {
+        console.log('Error in forgot-pass endpoint', error)
+        res.status(500).json({
+            message: 'Internal server error',
+            success: false
+        })
+    }
 }
 const verifyForgotPassword = async (req: Request, res: Response) => {
     
