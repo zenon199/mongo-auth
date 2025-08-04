@@ -1,6 +1,6 @@
 {
   "name": "project-starter-with-mongodb",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reusable auth structure to start any project with MongoDB",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
