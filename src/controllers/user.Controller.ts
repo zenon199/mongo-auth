@@ -5,6 +5,44 @@ import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 import User from "../models/user.Model"
 import sendVerificationMail from "../utils/sendMail"
+
+interface JwtUserPayload extends jwt.JwtPayload {
+    id: string;
+    email?: string;
+}
+
+const requireKey = (key: string) => {
+    const v = process.env[key];
+    if (!v) {
+        throw new Error(`{key} is not set.`)
+        return v;
+    }
+}
+
+const JWT_SECRET = requireKey('JWT_SECRET')
+const JWT_ACCESS_EXPIRY = process.env.JWT_ACCESS_EXPIRY || "10m";
+const JWT_REFRESH_EXPIRY = process.env.JWT_REFRESH_EXPIRY || "1d";
+
+const ACCESS_COOKIE = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  maxAge: 1000 * 60 * 15, // 15m
+  sameSite: "strict" as const,
+};
+
+const REFRESH_COOKIE = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  maxAge: 1000 * 60 * 60 * 24 * 7, // 7d
+  sameSite: "strict" as const,
+};
+
+const CLEAR_COOKIE = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict" as const,
+};
+
 const register = async (req: Request, res: Response) => {
     try {
         const parsedData = z.object({
@@ -33,15 +71,16 @@ const register = async (req: Request, res: Response) => {
         }
 
         const { name, email, password } = parsedData.data;
-        // const existingUser = await User.findOne({ email });
+        const existingUser = await User.findOne({ email });
 
-        // if (existingUser) {
-        //     res.status(400).json({
-        //         message: 'User already exists',
-        //         success: false
-        //     })
-        //     return
-        // }
+        //can save a DB call here
+        if (existingUser) {
+            res.status(400).json({
+                message: 'User already exists',
+                success: false
+            })
+            return
+        }
 
         const token: string = Crypto.randomBytes(32).toString('hex');
         const tokenExpiry: number = Date.now() + 10 * 60 * 1000; //10 minutes
@@ -156,29 +195,19 @@ const login = async (req: Request, res: Response) => {
         }
 
         const accessToken = jwt.sign(
-            { id: user._id, email: user.email },
-            process.env.JWT_SECRET as string,
-            { expiresIn: (process.env.JWT_ACCESS_EXPIRY || "10m") } as any
+            { id: user._id.toString(), email: user.email },
+            JWT_SECRET as string,
+            { expiresIn:JWT_ACCESS_EXPIRY } as any
         );
 
         const refreshToken = jwt.sign(
-            { id: user._id, email: user.email },
-            process.env.JWT_SECRET as string,
-            { expiresIn: (process.env.JWT_REFRESH_EXPIRY || "1d") } as any
+            { id: user._id.toString(), email: user.email },
+            JWT_SECRET as string,
+            { expiresIn: JWT_REFRESH_EXPIRY} as any
         );
 
-        res.cookie("accessToken", accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            maxAge: 1000 * 60 * 15, // 15 minutes
-            sameSite: "strict" as const
-        });
-        res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            maxAge: 1000 * 60 * 60 * 24 * 7,// 7 days
-            sameSite: "strict" as const
-        });
+        res.cookie("accessToken", accessToken, ACCESS_COOKIE);
+        res.cookie("refreshToken", refreshToken, REFRESH_COOKIE);
         
         res.status(200).json({
             message: 'Login successful',
@@ -213,9 +242,9 @@ const refreshAccessToken = async (req: Request, res: Response) => {
     }
 
     try {
-        const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET as string)
+        const decodedRaw = jwt.verify(refreshToken, JWT_SECRET as string)
 
-        if (typeof decoded !== 'object' || decoded === null || !('id' in decoded)) {
+        if (typeof decodedRaw !== 'object' || decodedRaw === null || !('id' in decodedRaw)) {
             res.status(401).json({
                 message: 'Invalid refresh token',
                 success: false
@@ -223,18 +252,24 @@ const refreshAccessToken = async (req: Request, res: Response) => {
             return
         }
 
+        const decoded = decodedRaw as JwtUserPayload;
+
+        const user = await User.findById(decoded.id);
+
+        if (!user || user.refreshToken !== refreshToken) {
+            res.status(401).json({
+                message: 'Refresh token not recognized',
+                success: false
+            })
+        }
+
         const newAccessToken = jwt.sign(
             { id: decoded.id, email: decoded.email },
-            process.env.JWT_SECRET as string,
-            { expiresIn: (process.env.JWT_ACCESS_EXPIRY || "10m") } as any
+            JWT_SECRET as string,
+            { expiresIn: JWT_ACCESS_EXPIRY } as any
         )
 
-        res.cookie("accessToken", newAccessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            maxAge: 1000 * 60 * 15, // 15 minutes
-            sameSite: "strict" as const
-        });
+        res.cookie("accessToken", newAccessToken, ACCESS_COOKIE);
 
         res.status(200).json({
             message: 'Access token refreshed successfully',
