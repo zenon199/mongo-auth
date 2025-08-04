@@ -6,7 +6,6 @@ interface JwtUserPayload extends jwt.JwtPayload {
     email?: string;
 }
 
-
 export const isLoggedIn = async (req: Request, res: Response, next: NextFunction) => {
     const accessToken = req.cookies?.accessToken;
     if (!accessToken) {

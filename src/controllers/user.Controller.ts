@@ -287,7 +287,40 @@ const refreshAccessToken = async (req: Request, res: Response) => {
 }
 
 const me = async (req: Request, res: Response) => {
+    const payload = req.user as JwtUserPayload;
+    try {
+        if (!payload.id) {
+            res.status(401).json({
+                message: "Unauthorized",
+                success: false
+            })
+            return
+        }
     
+        const user = await User.findById(payload.id).select(
+            "-password -verificationToken -verificationTokenExpiry -resetPasswordToken -resetPasswordTokenExpiry -refreshToken"
+        )
+    
+        if (!user) {
+            res.status(401).json({
+                message: "User not found",
+                success: false
+            })
+            return
+        }
+    
+        res.status(200).json({
+            message: "User found",
+            success: true,
+            user
+        })
+    } catch (error) {
+        console.log('Error in fetching user', error)
+        res.status(500).json({
+            message: 'Internal server error',
+            success: false
+        })
+    }
 }
 const logOut = async (req: Request, res: Response) => {
     
