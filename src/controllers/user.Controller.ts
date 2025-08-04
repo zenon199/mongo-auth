@@ -1,4 +1,5 @@
 import { Request, Response } from "express"
+import dotenv from 'dotenv'
 import { z } from "zod"
 import Crypto from "crypto"
 import bcrypt from "bcryptjs"
@@ -6,22 +7,17 @@ import jwt from "jsonwebtoken"
 import User from "../models/user.Model"
 import sendVerificationMail from "../utils/sendMail"
 
+dotenv.config();
 interface JwtUserPayload extends jwt.JwtPayload {
     id: string;
     email?: string;
 }
 
-const requireKey = (key: string) => {
-    const v = process.env[key];
-    if (!v) {
-        throw new Error(`{key} is not set.`)
-        return v;
-    }
-}
 
-const JWT_SECRET = requireKey('JWT_SECRET')
+const JWT_SECRET = process.env.JWT_SECRET || "ghfuygr3r6783y4nfhg"
 const JWT_ACCESS_EXPIRY = process.env.JWT_ACCESS_EXPIRY || "10m";
 const JWT_REFRESH_EXPIRY = process.env.JWT_REFRESH_EXPIRY || "1d";
+console.log(JWT_SECRET)
 
 const ACCESS_COOKIE = {
   httpOnly: true,
@@ -195,16 +191,19 @@ const login = async (req: Request, res: Response) => {
         }
 
         const accessToken = jwt.sign(
-            { id: user._id.toString(), email: user.email },
+            { id: user._id, email: user.email },
             JWT_SECRET as string,
             { expiresIn:JWT_ACCESS_EXPIRY } as any
         );
 
         const refreshToken = jwt.sign(
-            { id: user._id.toString(), email: user.email },
+            { id: user._id, email: user.email },
             JWT_SECRET as string,
             { expiresIn: JWT_REFRESH_EXPIRY} as any
         );
+
+        user.refreshToken = refreshToken;
+        await user.save();
 
         res.cookie("accessToken", accessToken, ACCESS_COOKIE);
         res.cookie("refreshToken", refreshToken, REFRESH_COOKIE);
@@ -299,7 +298,7 @@ const me = async (req: Request, res: Response) => {
     
         const user = await User.findById(payload.id).select(
             "-password -verificationToken -verificationTokenExpiry -resetPasswordToken -resetPasswordTokenExpiry -refreshToken"
-        )
+        ).lean()
     
         if (!user) {
             res.status(401).json({
@@ -323,7 +322,27 @@ const me = async (req: Request, res: Response) => {
     }
 }
 const logOut = async (req: Request, res: Response) => {
+    try {
+        const payload = req.user as JwtUserPayload;
     
+        if (payload?.id) {
+            await User.findByIdAndUpdate(payload.id, {$unset:{refreshAccessToken: ""}})
+        }
+    
+        res.clearCookie('accessToken', CLEAR_COOKIE)
+        res.clearCookie('refreshToken', CLEAR_COOKIE)
+        
+        res.status(200).json({
+            message: "Logout successful",
+            success: true,      
+        })
+    } catch (error) {
+        console.log('Error in logging out user', error)
+        res.status(500).json({
+            message: 'Internal server error',
+            success: false
+        })
+    }
 }
 const forgotPassword = async (req: Request, res: Response) => {
     
