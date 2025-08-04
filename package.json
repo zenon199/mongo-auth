@@ -1,13 +1,25 @@
 {
-  "name": "project-starter",
+  "name": "project-starter-with-mongodb",
   "version": "1.0.0",
-  "description": "AN entry level structure to start any project with MongoDB",
-  "main": "src/index.ts",
+  "description": "Reusable auth structure to start any project with MongoDB",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsc -b && node dist/index.js"
+    "build": "tsc",
+    "dev": "tsc -b && node dist/index.js",
+    "prepublishOnly": "pnpm run build"
   },
-  "keywords": [],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "keywords": ["auth", "jwt","cookies", "email-verification", "mongodb"],
   "author": "Zenon",
   "license": "ISC",
   "packageManager": "pnpm@10.9.0",
