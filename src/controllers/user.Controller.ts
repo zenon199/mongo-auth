@@ -87,7 +87,7 @@ const register = async (req: Request, res: Response) => {
             verificationTokenExpiry: tokenExpiry
         });
 
-        await sendVerificationMail(user.email, user.verificationToken as string)
+        await sendVerificationMail(user.email, user.verificationToken as string, 'verify')
 
         res.status(201).json({
             message: 'User created successfully, Check email for verification',
@@ -377,7 +377,7 @@ const forgotPassword = async (req: Request, res: Response) => {
 
         await user.save();
 
-        await sendVerificationMail(user.email, token);
+        await sendVerificationMail(user.email, token, 'verify-forgot-pass');
 
         res.status(200).json({
                 message: "Mail has been sent to the registered email, if it exist",

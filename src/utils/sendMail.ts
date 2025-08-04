@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 
-const sendVerificationMail = async (email: string, token: string) => {
+const sendVerificationMail = async (email: string, token: string, route: string) => {
     try {
         const transporter = nodemailer.createTransport({
             host: process.env.MAILTRAP_HOST,
@@ -12,7 +12,7 @@ const sendVerificationMail = async (email: string, token: string) => {
             }
         } as nodemailer.TransportOptions);
     
-        const verificationLink = `${process.env.BASE_URL}/api/v1/users/verify/${token}`;
+        const verificationLink = `${process.env.BASE_URL}/api/v1/users/${route}/${token}`;
     
         const mailOptions = {
           from: `"Authentication App" <${process.env.MAILTRAP_USERNAME}>`,
@@ -20,7 +20,11 @@ const sendVerificationMail = async (email: string, token: string) => {
           subject: "Please verify your email address",
           text: `
             Thank you for registering! Please verify your email address to complete your registration.
+
+
             ${verificationLink}
+
+            
             This verification link will expire in 10 mins.
             If you did not create an account, please ignore this email.
           `,
