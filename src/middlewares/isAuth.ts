@@ -1,6 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
+interface JwtUserPayload extends jwt.JwtPayload {
+    id: string;
+    email?: string;
+}
+
 
 export const isLoggedIn = async (req: Request, res: Response, next: NextFunction) => {
     const accessToken = req.cookies?.accessToken;
@@ -12,29 +17,17 @@ export const isLoggedIn = async (req: Request, res: Response, next: NextFunction
         return
     }
     try {
-         
-        function isJwtPayload(payload: unknown): payload is { id: string } {
-            return (
-                typeof payload === 'object' &&
-                payload !== null &&
-                'id' in payload
-            );
-        }
-         const decoded = jwt.verify(accessToken, process.env.JWT_SECRET as string)
+        const decoded = jwt.verify(accessToken, process.env.JWT_SECRET as string)
 
-    
-         if (!isJwtPayload(decoded)) {
+        if (typeof decoded !== "object" || decoded === null || !("id" in decoded)) {
             res.status(401).json({ message: "Invalid token", success: false });
-            return
+            return;
         }
 
-        req.user = decoded;
+        req.user = decoded as JwtUserPayload
+        next();
 
-         next();
-
-
-
-     } catch (error) {
+    } catch (error) {
         console.log('Invalid or expired access token', error)
         res.status(500).json({
             message: 'Internal server error',
